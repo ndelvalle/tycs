@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum RPS {
     Rock,
     Paper,
@@ -16,20 +16,20 @@ impl RPS {
         }
     }
 
-    pub fn play(&self, oponent: &Self) -> i32 {
-        match (self, oponent) {
+    pub fn play(me: &Self, oponent: &Self) -> i32 {
+        match (me, oponent) {
             // Win
-            (Self::Rock, Self::Scissors) => 6 + self.points(),
-            (Self::Paper, Self::Rock) => 6 + self.points(),
-            (Self::Scissors, Self::Paper) => 6 + self.points(),
+            (Self::Rock, Self::Scissors) => 6 + me.points(),
+            (Self::Paper, Self::Rock) => 6 + me.points(),
+            (Self::Scissors, Self::Paper) => 6 + me.points(),
 
             // Lose
-            (Self::Paper, Self::Scissors) => self.points(),
-            (Self::Scissors, Self::Rock) => self.points(),
-            (Self::Rock, Self::Paper) => self.points(),
+            (Self::Paper, Self::Scissors) => me.points(),
+            (Self::Scissors, Self::Rock) => me.points(),
+            (Self::Rock, Self::Paper) => me.points(),
 
             // Tie
-            _ => 3 + self.points(),
+            _ => 3 + me.points(),
         }
     }
 }
@@ -57,6 +57,43 @@ impl FromStr for RPS {
     }
 }
 
+#[derive(Debug, PartialEq)]
+enum ExpectedResult {
+    Lose,
+    Tie,
+    Win,
+}
+
+impl ExpectedResult {
+    fn get_hand(&self, oponent: RPS) -> RPS {
+        match (self, oponent) {
+            (Self::Win, RPS::Rock) => RPS::Paper,
+            (Self::Win, RPS::Paper) => RPS::Scissors,
+            (Self::Win, RPS::Scissors) => RPS::Rock,
+
+            (Self::Lose, RPS::Rock) => RPS::Scissors,
+            (Self::Lose, RPS::Paper) => RPS::Rock,
+            (Self::Lose, RPS::Scissors) => RPS::Paper,
+
+            (Self::Tie, a) => a,
+        }
+    }
+}
+
+impl FromStr for ExpectedResult {
+    type Err = ParsePointError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "X" => Ok(Self::Lose),
+            "Y" => Ok(Self::Tie),
+            "Z" => Ok(Self::Win),
+
+            _ => Err(ParsePointError),
+        }
+    }
+}
+
 fn main() {
     let input = include_str!("../input.txt");
 
@@ -68,12 +105,29 @@ fn main() {
                     let oponent = oponent.parse::<RPS>().unwrap();
                     let me = me.parse::<RPS>().unwrap();
 
-                    me.play(&oponent)
+                    RPS::play(&me, &oponent)
                 }
                 _ => panic!("Unexpected line {:?}", line),
             },
         )
         .sum();
 
-    println!("{}", result1);
+    let result2: i32 = input
+        .lines()
+        .map(
+            |line| match line.split_whitespace().collect::<Vec<&str>>()[..] {
+                [oponent, expected] => {
+                    let oponent = oponent.parse::<RPS>().unwrap();
+                    let expected = expected.parse::<ExpectedResult>().unwrap();
+                    let me = expected.get_hand(oponent);
+
+                    RPS::play(&me, &oponent)
+                }
+                _ => panic!("Unexpected line {:?}", line),
+            },
+        )
+        .sum();
+
+    println!("Part 1 {}", result1);
+    println!("Part 2 {}", result2);
 }
