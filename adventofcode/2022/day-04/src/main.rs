@@ -40,10 +40,28 @@ struct ElfPair {
 impl ElfPair {
     fn is_fully_contained(&self) -> bool {
         let ElfPair { elf_a, elf_b } = self;
+        // ...aaaaaaaaaa.....
+        // .......bbbbb......
         let a_contains_b = elf_a.from <= elf_b.from && elf_a.to >= elf_b.to;
+
+        // .......aaaaaa.....
+        // .....bbbbbbbbbb...
         let b_contains_a = elf_a.from >= elf_b.from && elf_a.to <= elf_b.to;
 
         return a_contains_b || b_contains_a;
+    }
+
+    fn is_overlap(&self) -> bool {
+        let ElfPair { elf_a, elf_b } = self;
+        // .........aaaaaaa..
+        // .......bbbbb......
+        let a_from = elf_a.from >= elf_b.from && elf_a.from <= elf_b.to;
+
+        // ...aaaaaaa........
+        // .......bbbbb......
+        let a_to = elf_a.to >= elf_b.from && elf_a.from <= elf_b.to;
+
+        return a_from || a_to;
     }
 }
 
@@ -65,11 +83,15 @@ fn main() {
     let input = include_str!("../input.txt");
     let input = input.trim();
 
-    let result_1 = input
-        .lines()
-        .map(|line| line.parse::<ElfPair>().unwrap())
+    let pairs = input.lines().map(|line| line.parse::<ElfPair>().unwrap());
+
+    let result_1 = pairs
+        .clone()
         .filter(|pair| pair.is_fully_contained())
         .count();
 
+    let result_2 = pairs.clone().filter(|pair| pair.is_overlap()).count();
+
     dbg!(result_1);
+    dbg!(result_2);
 }
