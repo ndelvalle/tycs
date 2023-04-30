@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::error::Error;
 use std::io;
 use std::io::Read;
@@ -7,22 +6,65 @@ use std::str::FromStr;
 
 type FileSizes = HashMap<Path, usize>;
 
+type DirSizes = HashMap<Path, usize>;
+
+#[derive(Debug)]
 struct State {
-    // $ cd <dir>
     current_dir: Path,
-    // $ ls <dir>
-    visited_dirs: HashSet<Path>,
     file_sizes: FileSizes,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+impl State {
+    fn new(initial: Path) -> Self {
+        State {
+            current_dir: initial,
+            file_sizes: HashMap::new(),
+        }
+    }
+
+    fn visit_file(&mut self, path: Path, size: usize) {
+        self.file_sizes.insert(path, size);
+    }
+
+    fn visit_dir(&mut self, path: Path) {
+        self.current_dir = self.current_dir.join(&path);
+    }
+
+    fn dir_sizes(&mut self) -> DirSizes {
+        let mut dir_sizes = DirSizes::new();
+
+        for (path, size) in &self.file_sizes {
+            let mut dir = path.dir();
+
+            while !dir.parts.is_empty() {
+                let dir_size = dir_sizes.entry(dir.clone()).or_insert(0);
+                *dir_size += size;
+
+                dir = dir.dir();
+            }
+        }
+
+        dir_sizes
+    }
+
+    fn sum_small_dirs(&mut self, threshold: usize) -> usize {
+        let dir_sizes = self.dir_sizes();
+
+        dir_sizes
+            .iter()
+            .filter_map(|(_, size)| Some(size).filter(|size| **size < threshold))
+            .sum()
+    }
+}
+
+#[derive(Debug, PartialEq, Hash, Eq, Clone)]
 struct Path {
     parts: Vec<String>,
 }
 
 impl Path {
-    fn full_path(&self) -> String {
-        self.parts.join("/")
+    fn new(parts: Vec<String>) -> Self {
+        Path { parts }
     }
 
     fn dir(&self) -> Path {
@@ -30,6 +72,23 @@ impl Path {
         parts.pop();
 
         Path { parts }
+    }
+
+    fn join(&self, other: &Path) -> Path {
+        let mut parts = self.parts.clone();
+        parts.extend(other.parts.clone());
+
+        Path { parts }
+    }
+}
+
+impl FromStr for Path {
+    type Err = Box<dyn Error>;
+
+    fn from_str(path: &str) -> Result<Self, Self::Err> {
+        let parts = path.split("/").map(|part| part.to_string()).collect();
+
+        Ok(Path::new(parts))
     }
 }
 
@@ -92,12 +151,44 @@ fn read_stdin() -> Result<String, Box<dyn Error>> {
 fn main() {
     let input = read_stdin().unwrap();
 
-    let splits = input
+    let commands = input
         .split("$")
         .map(|cmd| cmd.trim())
         .filter(|cmd| !cmd.is_empty())
         .map(|cmd| cmd.parse::<Command>().unwrap())
         .collect::<Vec<_>>();
 
-    println!("{:?}", splits);
+    let state = &mut State::new(Path::new(vec![]));
+
+    // TODO: iterate once instead of twice (here and in `State::dir_sizes`)
+    for cmd in &commands {
+        match cmd {
+            Command::Cd(dir) => match dir {
+                dir if dir == ".." => {
+                    state.current_dir = state.current_dir.dir();
+                }
+                dir if dir == "/" => {}
+                dir => {
+                    state.visit_dir(dir.parse::<Path>().unwrap());
+                }
+            },
+            Command::Ls(items) => {
+                for item in items {
+                    match item {
+                        LsItem::Dir(_) => {}
+                        LsItem::File(name, size) => {
+                            let path = state
+                                .current_dir
+                                .clone()
+                                .join(&name.parse::<Path>().unwrap());
+
+                            state.visit_file(path, *size);
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    println!("Result: {}", state.sum_small_dirs(100000));
 }
