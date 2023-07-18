@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt::{self, Display, Formatter};
 use std::io;
 use std::io::Read;
 use std::str::FromStr;
@@ -30,6 +31,7 @@ impl State {
         self.current_dir = self.current_dir.join(&path);
     }
 
+    /// Add the size of each file to its diredtory and all its parent directories.
     fn dir_sizes(&mut self) -> DirSizes {
         let mut dir_sizes = DirSizes::new();
 
@@ -92,6 +94,19 @@ impl FromStr for Path {
     }
 }
 
+impl Display for Path {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let path = self
+            .parts
+            .iter()
+            .map(|part| part.to_string())
+            .collect::<Vec<_>>()
+            .join("/");
+
+        write!(f, "{}", path)
+    }
+}
+
 #[derive(Debug)]
 enum LsItem {
     Dir(String),
@@ -148,6 +163,9 @@ fn read_stdin() -> Result<String, Box<dyn Error>> {
     Ok(String::from_utf8(buf)?)
 }
 
+const MAX_SIZE: usize = 70000000;
+const WANTED_FREE_SPACE: usize = 30000000;
+
 fn main() {
     let input = read_stdin().unwrap();
 
@@ -190,5 +208,18 @@ fn main() {
         };
     }
 
-    println!("Result: {}", state.sum_small_dirs(100000));
+    println!("Part 1: {}", state.sum_small_dirs(100000));
+
+    let used_space = state.file_sizes.values().sum::<usize>();
+    let free_space = MAX_SIZE - used_space;
+
+    let mut dirs = state.dir_sizes().into_iter().collect::<Vec<_>>();
+
+    dirs.sort_by(|(_, s1), (_, s2)| s1.cmp(s2));
+
+    let to_delete = dirs
+        .into_iter()
+        .find(|(_, size)| (*size + free_space) >= WANTED_FREE_SPACE);
+
+    println!("Part 2: {}", to_delete.unwrap().1);
 }
